@@ -1,4 +1,4 @@
-# ARWEAVE Gateways Monitor via AR.IO
+# ARWEAVE: AR.IO Gateways Monitor via @ar.io/sdk 
 *Portfolio project by Fabiola Serralunga*
 
 
