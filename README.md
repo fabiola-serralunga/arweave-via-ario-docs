@@ -1,8 +1,8 @@
-# ARWEAVE: AR.IO Gateways Monitor via @ar.io/sdk 
+# ARWEAVE: AR.IO Gateways Monitor via @ar.io/sdk — v1.1.0
 *Portfolio project by Fabiola Serralunga*
 
 
-> Live observability for the Arweave Gateway Registry from AR.IO — how many of the "registered" gateways actually answer right now?
+> Live observability for the AR.IO Arweave Gateway Registry — tracking how many 'registered' gateways are actually online and which ones are actively serving data?
 
 
 **Live demo:**
@@ -12,11 +12,9 @@
 
 Stack: Vercel Serverless Functions · `@ar.io/sdk` · Cloudflare Pages · vanilla JS (no framework)
 
->Abstract: The core of this project is an API that serves as one of several fallback mechanisms designed to eliminate reliance on absolute URLs when resolving ar:// URIs on the Arweave network. By querying the Arweave Gateway Registry (GAR) in real time via the AR.IO SDK, the API provides information not only on active gateways but also on their performance based on three criteria, ensuring content resolution across the network (provided AR.IO remains operational).
+>Abstract: The core of this project is an API that serves as one of several fallback mechanisms designed to eliminate reliance on absolute URLs when resolving ar:// URIs on the Arweave network. By querying the Arweave Gateway Registry (GAR) in real time via the AR.IO SDK, the API provides information not only on active gateways but also on their performance based on three criteria, ensuring content resolution across the network (provided AR.IO remains operational). In this latest release, v1.0.0, we added functionality to track how many gateways serve data, with the status check available in the DATA column.
 
-### Index
-- [ARWEAVE Gateways Monitor via AR.IO](#arweave-gateways-monitor-via-ario)
-    - [Index](#index)
+- [ARWEAVE: AR.IO Gateways Monitor via @ar.io/sdk](#arweave-ario-gateways-monitor-via-ariosdk)
     - [Why this exists](#why-this-exists)
     - [What is the Arweave Gateways Monitor](#what-is-the-arweave-gateways-monitor)
     - [What it does](#what-it-does)
@@ -24,6 +22,7 @@ Stack: Vercel Serverless Functions · `@ar.io/sdk` · Cloudflare Pages · vanill
     - [Load protection: absorbing traffic instead of rate-limiting it](#load-protection-absorbing-traffic-instead-of-rate-limiting-it)
     - [The performance score](#the-performance-score)
     - [Health checking under a tight budget](#health-checking-under-a-tight-budget)
+    - [Column DATA](#column-data)
     - [API reference](#api-reference)
     - [Run \& deploy](#run--deploy)
     - [Design decisions \& trade-offs](#design-decisions--trade-offs)
@@ -51,21 +50,23 @@ However, until we adopt and test this approach in development, it is wise to con
 ### What is the Arweave Gateways Monitor
 The core of this project is an API that serves as one of several fallback mechanisms designed to eliminate reliance on absolute URLs when resolving ar:// URIs on the Arweave network. By querying the Arweave Gateway Registry (GAR) in real time via the AR.IO SDK, the API provides information not only on active gateways but also on their performance based on three criteria, ensuring content resolution across the network (provided AR.IO remains operational).
 
+In this latest release, we added functionality to track how many gateways serve data, with the status check available in the DATA column.
+
 The API is part of a redundant architecture that complements both the adoption of ArNS (Arweave Name System) domains —which also rely on nodes provided by AR.IO— and node discovery via GraphQL. As a portfolio project, an interactive web interface consumes this API to organize operational nodes into a dynamic table, serving as a proof of concept for this resolution strategy.
 
 The AR.IO Gateway Registry says "547 gateways registered". But *registered* is not *reachable*. A node can be registered, staked, and still timeout on every request. This project measures that gap live: it reads the registry, pings every gateway, scores what survives, and shows everything in one page.
+
+Weighting operator stake and delegated stake differently is an open question. Pondering delegated stake more heavily could act as a proxy for gateway popularity and community trust, whereas operator stake reflects direct financial commitment.
 
 That is the whole thesis: **turn the permanence promise into a measurement.**
 
 ### What it does
 
-- **Curated ranking** (default): active gateways only, verified live, sorted by
-  a performance score.
-- **Full view** (`?view=all`): nothing discarded — every registered gateway in
-  one table, offline nodes at the bottom with the reason they failed
+- **Curated ranking** (default): active gateways only, verified live, sorted by a performance score.
+- **Column DATA**: Indicates which ones serve data.
+- **Full view** (`?view=all`): nothing discarded — every registered gateway in one table, offline nodes at the bottom with the reason they failed
   (`timeout`, `ECONNREFUSED`, `status: leaving`, `not-https-443`, …).
-- **Portfolio page**: static, dark-themed, sortable columns, text filter, and
-  wifi-style signal bars per gateway driven by measured latency.
+- **Portfolio page**: static, dark-themed, sortable columns, text filter, and  wifi-style signal bars per gateway driven by measured latency.
 
 ### Architecture
 
@@ -148,6 +149,14 @@ Curated mode additionally discards non-active gateways, nodes without a valid
 `https://…:443` URL, duplicates, and anything that failed both passes — with a
 full `discarded.reasons` breakdown in the response.
 
+### Column DATA
+DATA-PROBES every reachable gateway (layer 3): GET https://url/1y5cosgPNeu4MXufM8W_yh7M3ZMxWrh0MUWoCqOXE4s — a tiny text file uploaded for this monitor that says `check`. Follows the AR.IO 302
+redirect to the owner subdomain and requires HTTP 200 + exact body.<BR>
+     dataOk: true = serves data, <br>
+     dataOk: false = alive but NOT serving it correctly, <br>
+     dataOk: null = the 30s function budget ran out ("not tested").<br>
+Adds "dataServingTotal" to the meta.
+
 ### API reference
 
 | Endpoint | Returns |
@@ -169,7 +178,7 @@ calls a Vercel URL cross-origin without any proxy.
    `"type": "module"` and deploy. No env vars, no config.
 2. **Page (Cloudflare Pages):** upload `index.html` + `styles.css` ("Upload
    assets"). Before uploading, edit one line in `index.html`:
-   `var API_URL = 'https://<your-project>.vercel.app/api/gateways?view=all';`
+   `var API_URL = 'https://ar-io-gateway-api.vercel.app/api/gateways?view=all';`
 3. **Preview without touching the API:** open `index.html?mock=1` — 11 sample
    gateways, no network, no cache.
 
@@ -194,11 +203,5 @@ route.
 
 ### Limitations & what's next
 
-- `/ar-io/info` is a shallow probe: it proves the node answers, not that it
-  serves indexed data. Next layer: a GraphQL probe against each gateway's
-  `/graphql` (`transactions(first: 1)`) to distinguish "up" from "actually
-  serving".
-- Latency is measured from one region (the function's); a distributed probe
-  would give fairer numbers.
-- Operator stake and delegated stake are summed equally; weighting them
-  differently is an open question.
+- Latency is measured from one region (the function's); a distributed probe would give fairer numbers.
+- Operator stake and delegated stake are summed equally; weighting them differently is an open question. Weighting operator stake and delegated stake differently is an open question. Pondering delegated stake more heavily could act as a proxy for gateway popularity and community trust, whereas operator stake reflects direct financial commitment.
